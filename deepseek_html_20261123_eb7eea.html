@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ГеоКвест 7–8 · Все игры</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    min-height: 100vh; color: #222; padding: 16px;
+  }
+  .app {
+    max-width: 900px; margin: 0 auto;
+    background: #fff; border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4);
+    overflow: hidden; min-height: 90vh;
+    display: flex; flex-direction: column;
+  }
+  header {
+    background: linear-gradient(90deg,#ff6b35,#f7c531);
+    color: #fff; padding: 16px 22px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 8px;
+  }
+  header h1 { font-size: 1.2rem; }
+  .hud { font-weight: 700; font-size: .9rem; }
+  .hud span { background: rgba(255,255,255,.25); padding: 4px 12px; border-radius: 20px; margin-left: 6px; }
+  main { padding: 22px; flex: 1; }
+  .screen { display: none; }
+  .screen.active { display: block; animation: fade .3s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+  h2 { color: #1e3c72; margin-bottom: 12px; font-size: 1.2rem; }
+  p.task { margin-bottom: 14px; color: #444; line-height: 1.5; font-size: .95rem; }
+
+  .btn {
+    background: linear-gradient(90deg,#ff6b35,#f7c531); color:#fff;
+    border:none; padding: 12px 26px; border-radius: 12px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: transform .15s; box-shadow: 0 6px 18px rgba(255,107,53,.4);
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn.secondary { background: #e8eef7; color:#1e3c72; box-shadow:none; }
+  .btn.small { padding: 8px 16px; font-size: .85rem; }
+
+  /* Меню */
+  .menu-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr));
+    gap: 12px; margin-top: 8px;
+  }
+  .menu-card {
+    background: #f6f9ff; border: 2px solid #d6e2f5; border-radius: 14px;
+    padding: 16px; cursor: pointer; transition: .2s;
+  }
+  .menu-card:hover { border-color: #ff6b35; transform: translateY(-3px); }
+  .menu-card .num {
+    display: inline-block; background: #ff6b35; color: #fff;
+    width: 28px; height: 28px; border-radius: 50%; line-height: 28px;
+    text-align: center; font-weight: 800; margin-bottom: 8px;
+  }
+  .menu-card h3 { color: #1e3c72; font-size: 1rem; margin-bottom: 4px; }
+  .menu-card p { font-size: .82rem; color: #667; }
+  .menu-card.done { background: #f0fff5; border-color: #3aa655; }
+
+  /* 1. Конструктор */
+  .pool, .targets { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  .chip {
+    background:#e8eef7; color:#1e3c72; padding:10px 14px; border-radius:10px;
+    cursor:grab; font-size:.88rem; font-weight:600; user-select:none;
+    border:2px solid transparent; transition:.2s;
+  }
+  .chip.selected { border-color:#ff6b35; background:#fff2ea; }
+  .slot {
+    min-height:52px; border:2px dashed #b8c6dd; border-radius:12px;
+    padding:8px; flex:1 1 180px; display:flex; align-items:center; justify-content:center;
+    color:#9aa8bd; font-size:.82rem; transition:.2s;
+  }
+  .slot.over { background:#e6f0ff; border-color:#2a5298; }
+  .slot.filled { border-style:solid; border-color:#3aa655; background:#f0fff5; }
+  .slot .chip { cursor:default; margin:0; }
+  .slot-title { font-weight:700; color:#1e3c72; margin-bottom:6px; font-size:.88rem; }
+
+  /* 2. Углы */
+  .angle-wrap { display:flex; align-items:center; gap:22px; flex-wrap:wrap; margin-bottom:14px; }
+  .dial {
+    width:200px; height:200px; border-radius:50%; position:relative;
+    background: conic-gradient(#ff6b35 0deg, #ff6b35 0deg, #e8eef7 0deg);
+    border: 8px solid #1e3c72; cursor:pointer;
+  }
+  .angle-value { font-size:1.7rem; font-weight:800; color:#1e3c72; }
+  input[type=range] { width:100%; max-width:300px; accent-color:#ff6b35; }
+
+  /* 3. Прямая */
+  #lineCanvas { border:2px solid #1e3c72; border-radius:12px; cursor:crosshair; width:100%; background:#fafcff; }
+  .legend { font-size:.82rem; color:#555; margin-top:6px; }
+
+  /* 4. Викторина */
+  .qcard {
+    background:#f6f9ff; border:2px solid #d6e2f5; border-radius:12px;
+    padding:12px 16px; margin-bottom:10px;
+  }
+  .qcard .q { font-size:.92rem; margin-bottom:8px; line-height:1.4; }
+  .qcard .btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .mini {
+    padding:7px 16px; border-radius:8px; border:2px solid #2a5298;
+    background:#fff; color:#2a5298; font-weight:700; cursor:pointer; transition:.2s; font-size:.85rem;
+  }
+  .mini:hover { background:#2a5298; color:#fff; }
+  .mini.correct { background:#3aa655 !important; border-color:#3aa655; color:#fff; }
+  .mini.wrong { background:#e34a4a !important; border-color:#e34a4a; color:#fff; }
+
+  /* 5. Матрица */
+  table.matrix { width:100%; border-collapse:collapse; margin-bottom:14px; }
+  table.matrix th, table.matrix td { border:1px solid #cdd9ec; padding:7px 5px; text-align:center; font-size:.82rem; }
+  table.matrix th { background:#e8eef7; color:#1e3c72; }
+  table.matrix td:first-child { text-align:left; font-weight:600; }
+  table.matrix input { width:58px; text-align:center; border:1px solid #b8c6dd; border-radius:6px; padding:5px; font-size:.85rem; }
+  table.matrix input.ok { border-color:#3aa655; background:#f0fff5; }
+  table.matrix input.bad { border-color:#e34a4a; background:#fff0f0; }
+
+  .feedback { margin-top:12px; font-weight:700; font-size:.9rem; min-height:22px; }
+  .ok { color:#3aa655; } .bad { color:#e34a4a; }
+  .nav { display:flex; justify-content:space-between; margin-top:20px; gap:10px; flex-wrap:wrap; }
+  .badge { display:inline-block; background:#fff2ea; color:#ff6b35; font-weight:700; padding:3px 12px; border-radius:20px; font-size:.75rem; margin-bottom:8px; }
+  .result-big { font-size:2.6rem; font-weight:900; color:#ff6b35; text-align:center; margin:10px 0; }
+  .keys { display:flex; gap:8px; justify-content:center; margin:16px 0; flex-wrap:wrap; }
+  .key { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    font-size:1.3rem; background:#e8eef7; color:#9aa8bd; transition:.4s; font-weight:700; }
+  .key.earned { background:linear-gradient(135deg,#ff6b35,#f7c531); color:#fff; transform:scale(1.1); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🎮 ГеоКвест 7–8</h1>
+    <div class="hud">Баллы: <span id="score">0</span></div>
+  </header>
+  <main>
+
+    <!-- МЕНЮ -->
+    <section class="screen active" id="s-menu">
+      <h2>Выбери испытание</h2>
+      <p class="task">Пять механик по геометрии 7–8 класса. За каждую — до 20 баллов.</p>
+      <div class="keys" id="menuKeys">
+        <div class="key">①</div><div class="key">②</div><div class="key">③</div><div class="key">④</div><div class="key">⑤</div>
+      </div>
+      <div class="menu-grid" id="menuGrid"></div>
+      <div class="nav">
+        <button class="btn secondary" onclick="location.reload()">Сбросить всё 🔄</button>
+        <button class="btn" onclick="go('s-end')">Итоги 🏁</button>
+      </div>
+    </section>
+
+    <!-- 1 -->
+    <section class="screen" id="s1">
+      <span class="badge">Испытание 1 · 20 баллов</span>
+      <h2>🧩 Конструктор признаков</h2>
+      <p class="task">Перетащи (или выбери и нажми на слот) карточки так, чтобы каждое свойство попало к нужной фигуре.</p>
+      <div class="pool" id="pool1"></div>
+      <div class="targets" id="targets1"></div>
+      <div class="feedback" id="fb1"></div>
+      <div class="nav">
+        <button class="btn secondary" onclick="go('s-menu')">◀ Меню</button>
+        <button class="btn" onclick="check1()">Проверить ✔</button>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="screen" id="s2">
+      <span class="badge">Испытание 2 · 20 баллов</span>
+      <h2>📐 Развёртка углов</h2>
+      <p class="task">Потяни ползунок, чтобы выставить угол, затем выбери его тип.</p>
+      <div class="angle-wrap">
+        <div class="dial" id="dial"></div>
+        <div>
+          <div class="angle-value" id="angleVal">0°</div>
+          <input type="range" id="angleRange" min="0" max="180" value="0">
+        </div>
+      </div>
+      <div class="pool" id="angleTypes"></div>
+      <div class="feedback" id="fb2"></div>
+      <div class="nav">
+        <button class="btn secondary" onclick="go('s-menu')">◀ Меню</button>
+        <button class="btn" onclick="check2()">Проверить ✔</button>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="screen" id="s3">
+      <span class="badge">Испытание 3 · 20 баллов</span>
+      <h2>📏 Прямая и отрезок</h2>
+      <p class="task">Кликни по полю, чтобы поставить точку. Задание: точка должна лежать <b>на прямой, но не на отрезке</b>.</p>
+      <canvas id="lineCanvas" width="800" height="360"></canvas>
+      <div class="legend">🟦 прямая · 🟧 отрезок · 🔴 твоя точка</div>
+      <div class="feedback" id="fb3"></div>
+      <div class="nav">
+        <button class="btn secondary" onclick="go('s-menu')">◀ Меню</button>
+        <button class="btn" onclick="check3()">Проверить ✔</button>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="screen" id="s4">
+      <span class="badge">Испытание 4 · 20 баллов</span>
+      <h2>⚖️ Свойство или признак?</h2>
+      <p class="task">Для каждого утверждения выбери: свойство или признак.</p>
+      <div id="cards4"></div>
+      <div class="feedback" id="fb4"></div>
+      <div class="nav">
+        <button class="btn secondary" onclick="go('s-menu')">◀ Меню</button>
+        <button class="btn" onclick="check4()">Проверить ✔</button>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="screen" id="s5">
+      <span class="badge">Испытание 5 · 20 баллов</span>
+      <h2>🔲 Матрица четырёхугольников</h2>
+      <p class="task">Впиши «да» или «нет» для каждого свойства у фигуры.</p>
+      <table class="matrix" id="matrix5">
+        <thead>
+          <tr><th>Свойство</th><th>Параллелограмм</th><th>Прямоугольник</th><th>Ромб</th><th>Квадрат</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="feedback" id="fb5"></div>
+      <div class="nav">
+        <button class="btn secondary" onclick="go('s-menu')">◀ Меню</button>
+        <button class="btn" onclick="check5()">Проверить ✔</button>
+      </div>
+    </section>
+
+    <!-- ИТОГИ -->
+    <section class="screen" id="s-end">
+      <h2>🏁 Итоги</h2>
+      <div class="result-big" id="finalScore">0 / 100</div>
+      <div class="keys" id="endKeys">
+        <div class="key">①</div><div class="key">②</div><div class="key">③</div><div class="key">④</div><div class="key">⑤</div>
+      </div>
+      <p class="task" id="finalMsg"></p>
+      <div class="nav">
+        <button class="btn secondary" onclick="go('s-menu')">◀ В меню</button>
+        <button class="btn" onclick="location.reload()">Заново 🔄</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ================= СОСТОЯНИЕ ================= */
+const state = { scores: [0,0,0,0,0], done: [false,false,false,false,false] };
+const screens = ['s-menu','s1','s2','s3','s4','s5','s-end'];
+
+const menuItems = [
+  { id: 's1', num: '1', title: 'Конструктор признаков', desc: 'Перетащи свойства к фигурам' },
+  { id: 's2', num: '2', title: 'Развёртка углов', desc: 'Выставь угол и определи тип' },
+  { id: 's3', num: '3', title: 'Прямая и отрезок', desc: 'Поставь точку в нужном месте' },
+  { id: 's4', num: '4', title: 'Свойство или признак?', desc: 'Викторина на различение' },
+  { id: 's5', num: '5', title: 'Матрица четырёхугольников', desc: 'Заполни таблицу «да/нет»' }
+];
+
+function go(id) {
+  screens.forEach(s => document.getElementById(s).classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (id === 's-end') renderEnd();
+}
+function setScore(i, val) {
+  state.scores[i] = val; state.done[i] = true;
+  updateHUD(); renderMenu(); updateKeys();
+}
+function updateHUD() {
+  document.getElementById('score').textContent = state.scores.reduce((a,b)=>a+b,0);
+}
+function updateKeys() {
+  const idx = state.done.findIndex(d => !d);
+  // ключи в меню
+  document.querySelectorAll('#menuKeys .key').forEach((k,i) => {
+    k.classList.toggle('earned', state.done[i]);
+  });
+  document.querySelectorAll('#endKeys .key').forEach((k,i) => {
+    k.classList.toggle('earned', state.done[i]);
+  });
+}
+function renderMenu() {
+  const grid = document.getElementById('menuGrid');
+  grid.innerHTML = '';
+  menuItems.forEach((m, i) => {
+    const card = document.createElement('div');
+    card.className = 'menu-card' + (state.done[i] ? ' done' : '');
+    card.innerHTML = `<span class="num">${m.num}</span>
+      <h3>${m.title}</h3><p>${m.desc}</p>
+      <p style="margin-top:6px;font-weight:700;color:#ff6b35;">${state.scores[i]}/20</p>`;
+    card.addEventListener('click', () => go(m.id));
+    grid.appendChild(card);
+  });
+}
+function renderEnd() {
+  const total = state.scores.reduce((a,b)=>a+b,0);
+  document.getElementById('finalScore').textContent = total + ' / 100';
+  updateKeys();
+  let msg = '';
+  if (total >= 90) msg = '🌟 Блестяще! Ты — геометр-эксперт!';
+  else if (total >= 70) msg = '👍 Отличный результат!';
+  else if (total >= 50) msg = '🙂 Хорошо! Повтори ключевые определения.';
+  else msg = '💪 Не сдавайся! Пройди испытания ещё раз.';
+  document.getElementById('finalMsg').textContent = msg;
+}
+
+/* ================= 1. КОНСТРУКТОР ================= */
+const cards1 = [
+  {id:'p1', text:'Противоположные стороны равны', target:'par'},
+  {id:'p2', text:'Диагонали точкой пересечения делятся пополам', target:'par'},
+  {id:'r1', text:'Все углы прямые', target:'rect'},
+  {id:'r2', text:'Диагонали равны', target:'rect'},
+  {id:'h1', text:'Один из углов прямой', target:'rect'},
+  {id:'rh1', text:'Все стороны равны', target:'rhomb'},
+  {id:'rh2', text:'Диагонали взаимно перпендикулярны', target:'rhomb'}
+];
+const targets1 = [
+  {id:'par', title:'Параллелограмм'},
+  {id:'rect', title:'Прямоугольник'},
+  {id:'rhomb', title:'Ромб'}
+];
+let selectedChip = null;
+
+function init1() {
+  const pool = document.getElementById('pool1');
+  const targets = document.getElementById('targets1');
+  pool.innerHTML = ''; targets.innerHTML = '';
+  const shuffled = [...cards1].sort(()=>Math.random()-0.5);
+  shuffled.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'chip'; el.textContent = c.text;
+    el.dataset.id = c.id; el.dataset.target = c.target;
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.chip.selected').forEach(x=>x.classList.remove('selected'));
+      selectedChip = el; el.classList.add('selected');
+    });
+    pool.appendChild(el);
+  });
+  targets1.forEach(t => {
+    const wrap = document.createElement('div');
+    wrap.style.flex = '1 1 220px';
+    wrap.innerHTML = `<div class="slot-title">${t.title}</div>`;
+    const slot = document.createElement('div');
+    slot.className = 'slot'; slot.dataset.target = t.id;
+    slot.textContent = 'перетащи сюда';
+    slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('over'); });
+    slot.addEventListener('dragleave', () => slot.classList.remove('over'));
+    slot.addEventListener('drop', e => {
+      e.preventDefault(); slot.classList.remove('over');
+      const id = e.dataTransfer.getData('text/plain');
+      const chip = document.querySelector(`.chip[data-id="${id}"]`);
+      if (chip) { slot.innerHTML=''; slot.appendChild(chip); slot.classList.add('filled'); }
+    });
+    slot.addEventListener('click', () => {
+      if (selectedChip) {
+        slot.innerHTML=''; slot.appendChild(selectedChip);
+        slot.classList.add('filled'); selectedChip=null;
+      }
+    });
+    wrap.appendChild(slot);
+    targets.appendChild(wrap);
+  });
+}
+document.addEventListener('dragstart', e => {
+  if (e.target.classList.contains('chip')) e.dataTransfer.setData('text/plain', e.target.dataset.id);
+});
+function check1() {
+  let correct = 0;
+  document.querySelectorAll('#targets1 .slot').forEach(slot => {
+    const chip = slot.querySelector('.chip');
+    if (chip && chip.dataset.target === slot.dataset.target) correct++;
+  });
+  const score = Math.round(correct / cards1.length * 20);
+  setScore(0, score);
+  document.getElementById('fb1').innerHTML = `<span class="${score>=16?'ok':'bad'}">Верно ${correct} из ${cards1.length}. Баллы: ${score}/20</span>`;
+}
+
+/* ================= 2. УГЛЫ ================= */
+let chosenAngleType = null;
+const angleTypes = [
+  {id:'ostry', name:'Острый'},
+  {id:'pryamoy', name:'Прямой'},
+  {id:'tupoy', name:'Тупой'},
+  {id:'razvernuty', name:'Развёрнутый'}
+];
+
+function init2() {
+  document.getElementById('angleRange').value = 0;
+  updateAngle(0);
+  const box = document.getElementById('angleTypes');
+  box.innerHTML = '';
+  angleTypes.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'chip'; el.textContent = t.name; el.dataset.id = t.id;
+    el.addEventListener('click', () => {
+      document.querySelectorAll('#angleTypes .chip').forEach(x=>x.classList.remove('selected'));
+      el.classList.add('selected'); chosenAngleType = t.id;
+    });
+    box.appendChild(el);
+  });
+}
+function updateAngle(deg) {
+  document.getElementById('dial').style.background =
+    `conic-gradient(#ff6b35 ${deg}deg, #e8eef7 ${deg}deg)`;
+  document.getElementById('angleVal').textContent = deg + '°';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('angleRange').addEventListener('input', e => updateAngle(+e.target.value));
+});
+function typeOf(deg) {
+  if (deg === 0) return null;
+  if (deg < 90) return 'ostry';
+  if (deg === 90) return 'pryamoy';
+  if (deg < 180) return 'tupoy';
+  return 'razvernuty';
+}
+function check2() {
+  const deg = +document.getElementById('angleRange').value;
+  const correctType = typeOf(deg);
+  let score = 0;
+  if (correctType && chosenAngleType === correctType) score = 20;
+  else if (correctType) score = 5;
+  setScore(1, score);
+  const name = correctType ? angleTypes.find(t=>t.id===correctType).name.toLowerCase() : 'не определён';
+  document.getElementById('fb2').innerHTML = `<span class="${score===20?'ok':'bad'}">Угол ${deg}° — ${name} угол. Баллы: ${score}/20</span>`;
+}
+
+/* ================= 3. ПРЯМАЯ ================= */
+const canvas = document.getElementById('lineCanvas');
+const ctx = canvas.getContext('2d');
+let userPoint = null;
+const lineK = 0.5, lineB = 80;
+
+function draw3() {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = '#e8eef7'; ctx.lineWidth = 1;
+  for (let x=0; x<w; x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  for (let y=0; y<h; y+=40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  ctx.strokeStyle = '#2a5298'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, lineB); ctx.lineTo(w, lineK*w+lineB); ctx.stroke();
+  const x1=200, x2=500;
+  ctx.strokeStyle = '#ff6b35'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(x1, lineK*x1+lineB); ctx.lineTo(x2, lineK*x2+lineB); ctx.stroke();
+  ctx.fillStyle = '#ff6b35'; ctx.font = 'bold 13px Arial';
+  ctx.fillText('A', x1-5, lineK*x1+lineB-10);
+  ctx.fillText('B', x2+5, lineK*x2+lineB-10);
+  if (userPoint) {
+    ctx.fillStyle = '#e34a4a';
+    ctx.beginPath(); ctx.arc(userPoint.x, userPoint.y, 7, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+function init3() {
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    userPoint = {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height)
+    };
+    draw3();
+  });
+  draw3();
+}
+function check3() {
+  if (!userPoint) {
+    document.getElementById('fb3').innerHTML = '<span class="bad">Сначала поставь точку!</span>';
+    return;
+  }
+  const onLine = Math.abs(userPoint.y - (lineK*userPoint.x + lineB)) < 6;
+  const inSeg = userPoint.x >= 195 && userPoint.x <= 505;
+  let score = 0, msg = '';
+  if (onLine && !inSeg) { score = 20; msg = '✅ Точка на прямой, вне отрезка — идеально!'; }
+  else if (onLine && inSeg) { score = 8; msg = '⚠️ Точка на прямой, но попала на отрезок.'; }
+  else { score = 3; msg = '❌ Точка не на прямой.'; }
+  setScore(2, score);
+  document.getElementById('fb3').innerHTML = `<span class="${score===20?'ok':'bad'}">${msg} Баллы: ${score}/20</span>`;
+}
+
+/* ================= 4. СВОЙСТВО ИЛИ ПРИЗНАК ================= */
+const cards4 = [
+  {text:'В параллелограмме противоположные стороны равны', answer:'prop'},
+  {text:'Если в четырёхугольнике диагонали точкой пересечения делятся пополам, то это параллелограмм', answer:'sign'},
+  {text:'В прямоугольнике диагонали равны', answer:'prop'},
+  {text:'Если в параллелограмме диагонали равны, то это прямоугольник', answer:'sign'},
+  {text:'Если в параллелограмме все стороны равны, то это ромб', answer:'sign'},
+  {text:'Диагонали ромба взаимно перпендикулярны', answer:'prop'},
+  {text:'Если в параллелограмме диагонали взаимно перпендикулярны, то это ромб', answer:'sign'},
+  {text:'В квадрате все углы прямые', answer:'prop'}
+];
+const chosen4 = {};
+
+function init4() {
+  const box = document.getElementById('cards4');
+  box.innerHTML = '';
+  cards4.forEach((c,i) => {
+    const el = document.createElement('div');
+    el.className = 'qcard';
+    el.innerHTML = `<div class="q">${i+1}. ${c.text}</div>
+      <div class="btns">
+        <button class="mini" data-ans="prop">Свойство</button>
+        <button class="mini" data-ans="sign">Признак</button>
+      </div>`;
+    el.querySelectorAll('.mini').forEach(btn => {
+      btn.addEventListener('click', () => {
+        el.querySelectorAll('.mini').forEach(b => b.classList.remove('chosen'));
+        btn.style.background = '#2a5298'; btn.style.color = '#fff';
+        chosen4[i] = btn.dataset.ans;
+      });
+    });
+    box.appendChild(el);
+  });
+}
+function check4() {
+  let correct = 0;
+  document.querySelectorAll('#cards4 .qcard').forEach((el,i) => {
+    const c = cards4[i];
+    el.querySelectorAll('.mini').forEach(btn => {
+      btn.classList.remove('correct','wrong');
+      if (btn.dataset.ans === c.answer) btn.classList.add('correct');
+      else if (chosen4[i] === btn.dataset.ans) btn.classList.add('wrong');
+    });
+    if (chosen4[i] === c.answer) correct++;
+  });
+  const score = Math.round(correct / cards4.length * 20);
+  setScore(3, score);
+  document.getElementById('fb4').innerHTML = `<span class="${score>=16?'ok':'bad'}">Верно ${correct} из ${cards4.length}. Баллы: ${score}/20</span>`;
+}
+
+/* ================= 5. МАТРИЦА ================= */
+const matrixData = [
+  {prop:'Противоположные стороны равны', ans:['да','да','да','да']},
+  {prop:'Все углы прямые', ans:['нет','да','нет','да']},
+  {prop:'Все стороны равны', ans:['нет','нет','да','да']},
+  {prop:'Диагонали равны', ans:['нет','да','нет','да']},
+  {prop:'Диагонали взаимно перпендикулярны', ans:['нет','нет','да','да']}
+];
+function init5() {
+  const tbody = document.querySelector('#matrix5 tbody');
+  tbody.innerHTML = '';
+  matrixData.forEach((row, r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.prop}</td>` +
+      row.ans.map((_,c) => `<td><input data-r="${r}" data-c="${c}" placeholder="да/нет"></td>`).join('');
+    tbody.appendChild(tr);
+  });
+}
+function check5() {
+  let correct = 0, total = 0;
+  document.querySelectorAll('#matrix5 input').forEach(inp => {
+    const r = +inp.dataset.r, c = +inp.dataset.c;
+    const expected = matrixData[r].ans[c];
+    const val = inp.value.trim().toLowerCase();
+    total++;
+    inp.classList.remove('ok','bad');
+    if (val === expected) { correct++; inp.classList.add('ok'); }
+    else inp.classList.add('bad');
+  });
+  const score = Math.round(correct / total * 20);
+  setScore(4, score);
+  document.getElementById('fb5').innerHTML = `<span class="${score>=16?'ok':'bad'}">Верно ${correct} из ${total}. Баллы: ${score}/20</span>`;
+}
+
+/* ================= СТАРТ ================= */
+document.addEventListener('DOMContentLoaded', () => {
+  renderMenu();
+  init1(); init2(); init3(); init4(); init5();
+  // поддержка якорей #game1..#game5 из QR-кодов
+  const hash = location.hash.replace('#','');
+  if (['s1','s2','s3','s4','s5'].includes(hash)) go(hash);
+});
+</script>
+</body>
+</html>
